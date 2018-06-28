@@ -2,17 +2,22 @@ package com.xiaowu.study.camerademo;
 
 import android.content.Context;
 import android.content.Intent;
+import android.graphics.Point;
+import android.graphics.Rect;
 import android.hardware.Camera;
 import android.media.CamcorderProfile;
 import android.media.MediaRecorder;
 import android.net.Uri;
 import android.util.AttributeSet;
+import android.util.Log;
 import android.view.SurfaceHolder;
 import android.view.SurfaceView;
 
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * Author: wumm
@@ -41,6 +46,26 @@ public class CameraPreview extends SurfaceView implements SurfaceHolder.Callback
             Camera.Parameters parameters = camera.getParameters();
             parameters.setFocusMode(Camera.Parameters.FOCUS_MODE_AUTO);
             camera.setParameters(parameters);
+            camera.setFaceDetectionListener(new Camera.FaceDetectionListener() {
+                @Override
+                public void onFaceDetection(Camera.Face[] faces, Camera camera) {
+                    List<Camera.Area> areas = new ArrayList<>();
+                    if (faces == null || faces.length == 0)
+                        return;
+                    for (Camera.Face face : faces) {
+                        Rect rect = face.rect;
+                        Point leftEye = face.leftEye;
+                        Point rightEye = face.rightEye;
+                        Point mouth = face.mouth;
+                        Log.e("onFaceDetection", "---rect = " + rect.left + " , " + rect.top + " , " + rect.right + " , " + rect.bottom);
+                        Camera.Area area = new Camera.Area(rect, 1);
+                        areas.add(area);
+                    }
+                    Camera.Parameters parameters1 = camera.getParameters();
+                    parameters1.setFocusAreas(areas);
+                    camera.setParameters(parameters1);
+                }
+            });
         }
     }
 
@@ -49,6 +74,8 @@ public class CameraPreview extends SurfaceView implements SurfaceHolder.Callback
             try {
                 camera.setPreviewDisplay(holder);
                 camera.startPreview();
+                if (camera.getParameters().getMaxNumDetectedFaces() > 0)
+                    camera.startFaceDetection();
             } catch (IOException e) {
                 e.printStackTrace();
             }
@@ -103,11 +130,11 @@ public class CameraPreview extends SurfaceView implements SurfaceHolder.Callback
         mediaRecorder.setAudioSource(MediaRecorder.AudioSource.CAMCORDER);
         mediaRecorder.setVideoSource(MediaRecorder.VideoSource.CAMERA);
         mediaRecorder.setProfile(CamcorderProfile.get(CamcorderProfile.QUALITY_HIGH));
-//        mediaRecorder.setOutputFormat(MediaRecorder.OutputFormat.MPEG_4);
-//        mediaRecorder.setAudioEncoder(MediaRecorder.AudioEncoder.AMR_NB);
-//        mediaRecorder.setVideoEncoder(MediaRecorder.VideoEncoder.MPEG_4_SP);
-        mediaRecorder.setOutputFile(MediaPathUtil.getMediaPath(MediaPathUtil.TYPE_VIDEO).getPath());
+        File mediaFile = MediaPathUtil.getMediaPath(MediaPathUtil.TYPE_VIDEO);
+        if (mediaFile != null)
+            mediaRecorder.setOutputFile(mediaFile.getPath());
         mediaRecorder.setPreviewDisplay(holder.getSurface());
+        mediaRecorder.setOrientationHint(90);
         try {
             mediaRecorder.prepare();
         } catch (IOException e) {
@@ -123,13 +150,13 @@ public class CameraPreview extends SurfaceView implements SurfaceHolder.Callback
             mediaRecorder.start();
     }
 
-    public void stopRecorder(){
+    public void stopRecorder() {
         mediaRecorder.stop();
         releaseMediaRecorder();
     }
 
-    private void releaseMediaRecorder(){
-        if (mediaRecorder != null){
+    private void releaseMediaRecorder() {
+        if (mediaRecorder != null) {
             mediaRecorder.reset();
             mediaRecorder.release();
             mediaRecorder = null;
